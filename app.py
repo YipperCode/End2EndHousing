@@ -1,0 +1,94 @@
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import FunctionTransformer, StandardScaler, OneHotEncoder
+from sklearn.base import BaseEstimator, TransformerMixin
+import pandas as pd
+import numpy as np
+import streamlit as st
+from sklearn.base import BaseEstimator, TransformerMixin
+import joblib
+
+def prediction(data):
+    clf = joblib.load("best_model.pkl")
+    full_pipeline = get_pipieline()
+    data_prepared = full_pipeline.transform(data)
+    return clf.predict(data_prepared)
+
+def num_pipeline():
+    return Pipeline([
+        ('imputer', SimpleImputer(strategy="median")),
+        ('attribs_adder', CombinedAttributesAdder()),
+        ('std_scaler', StandardScaler())
+    ])
+
+def get_pipieline():
+    housing = pd.read_csv("datasets/housing/housing.csv")
+    housing = housing.drop("median_house_value", axis=1)
+    housing_num = housing.drop("ocean_proximity", axis=1)
+
+    num_attribs = list(housing_num)
+    cat_attribs = ["ocean_proximity"]
+
+    num_transformer = num_pipeline()
+    full_pipeline = ColumnTransformer([
+        ("num", num_transformer, num_attribs),
+        ("cat", OneHotEncoder(), cat_attribs)
+    ])
+
+    full_pipeline.fit(housing)
+
+    return full_pipeline
+
+rooms_ix, bedrooms_ix, population_ix, households_ix = 3, 4, 5, 6
+
+class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
+  def __init__(self, add_bedrooms_per_room=True):
+    self.add_bedrooms_per_room=add_bedrooms_per_room
+  
+  def fit(self, X, y=None):
+    return self
+  
+  def transform(self, X):
+    rooms_per_household = X[:, rooms_ix] / X[:, households_ix]
+    population_per_household = X[:, population_ix] / X[:, households_ix]
+    if self.add_bedrooms_per_room:
+      bedrooms_per_room = X[:, bedrooms_ix] / X[:, rooms_ix]
+      return np.c_[X, rooms_per_household, population_per_household,bedrooms_per_room]
+    else:
+      return np.c_[X, rooms_per_household, population_per_household]
+
+st.title("Predicting median house value")
+st.markdown("Model to determine the median house value based on the income of the person")
+
+col1, col2 = st.columns(2)
+with col1:
+    longitude = st.number_input("Longitude", value = -122.23, max_value = 0.0)
+    latitude = st.number_input("Latitude", value = 37.88)
+    age = st.number_input("Housing Median Age", value = 41.0)
+    total_rooms = st.number_input("Total rooms", value = 880.0)
+    
+with col2:
+    total_bedrooms = st.number_input("Total bedrooms", value = 129.0)
+    population = st.number_input("Population", value = 322.0)
+    households = st.number_input("Households", value = 126.0)
+    income = st.number_input("Median income", value = 8.33)
+
+ocean_proximity = st.selectbox("Ocean Proximity: ",['<1H OCEAN', 'INLAND', 'ISLAND', 'NEAR BAY', 'NEAR OCEAN'])
+
+
+if st.button("Predict house value"):  
+    ocean = 0 if ocean_proximity == '<1H OCEAN' else 1 if ocean_proximity == 'INLAND' else 2 if ocean_proximity == 'ISLAND' else 3 if ocean_proximity == 'NEAR BAY' else 4 
+    data = pd.DataFrame({
+            'longitude': [longitude],
+            'latitude': [latitude],
+            'housing_median_age': [age],
+            'total_rooms': [total_rooms],
+            'total_bedrooms': [total_bedrooms],
+            'population': [population],
+            'households': [households],
+            'median_income': [income],
+            'ocean_proximity': [ocean_proximity]
+        }) 
+    result = prediction(data)
+    st.text(result[0]) 
