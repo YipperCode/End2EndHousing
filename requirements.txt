@@ -2,5 +2,5 @@ scikit-learn==1.2.1
 matplotlib==3.7.0
 numpy==1.24.2
 pandas==1.5.2
-streamlist==1.19.0
+streamlit==1.19.0
 joblist==1.2.0
